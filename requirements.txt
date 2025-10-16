@@ -1,0 +1,31 @@
+# PyTorch
+torch==2.8.0
+triton==3.4.0
+
+# Transformers & PEFT (LoRA)
+transformers==4.56.1
+peft==0.17.1
+trl==0.23.0
+sentencepiece==0.2.1
+tiktoken==0.11.0
+tokenizers==0.22.0
+
+# Dataset handling
+datasets==4.1.0
+pandas==2.3.2
+numpy==2.2.6
+pyarrow==21.0.0
+
+# Evaluation & Metrics
+scikit-learn==1.7.2
+evaluate==0.4.0  # PyPI에서 evaluate 패키지 필요
+
+# SQL parsing & manipulation
+sqlparse==0.5.3
+sqlglot==27.16.3
+moz-sql-parser==4.40.21126
+
+# Utilities
+safetensors==0.6.2
+accelerate==1.10.1
+requests==2.32.5
