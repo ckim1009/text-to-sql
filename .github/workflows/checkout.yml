@@ -3,3 +3,7 @@ on: push
   jobs:
     checkout:
       runs-on: ubunbu-latest
+      steps:
+        - run: ls -al
+        - uses: actions/checkout@v5
+        
