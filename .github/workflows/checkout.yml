@@ -1,9 +1,9 @@
 name: Our Workflow
 on: push
-  jobs:
-    checkout:
-      runs-on: ubunbu-latest
-      steps:
-        - run: ls -al
-        - uses: actions/checkout@v5
-        
+jobs:
+  checkout:
+    runs-on: ubunbu-latest
+    steps:
+      - run: ls -al
+      - uses: actions/checkout@v5
+      
