@@ -49,43 +49,13 @@ def get_db_schemas_full(tables_data):
         db_schemas_full[db_id] = table_schemas
     return db_schemas_full
 
-
-def load_ddl(path, train_data_path):
-    """
-    각 SQL에서 사용된 테이블만 포함하고,
-    스키마를 SQL DDL(CREATE TABLE) 형식으로 표현
-    """
-    with open(train_data_path, "r") as f:
-        train_data = json.load(f)
-    with open(f'{path}/tables.json', "r") as f:
-        tables_data = json.load(f)
-
-   
-    
-    
-    # instruction-style 데이터셋 생성
-    db_schemas_full = get_db_schemas_full(tables_data)
-
-    check = True
-
-    # instruction-style 데이터셋 생성
+def extract_record(train_data):
     records = []
     for item in train_data:
         db_id = item["db_id"]
         question = item["question"]
         sql = item["query"]
-        # ast = item["sql"]  # 이미 AST가 있음
-        # schema = schema_map[db_id]
 
-        # # SQL에서 사용된 테이블 추출
-        # used_tables = set()
-        # parsed = sqlparse.parse(sql)
-        # for stmt in parsed:
-        #     for token in stmt.tokens:
-        #         token_str = str(token).lower()
-        #         for table_name in db_schemas_full[db_id].keys():
-        #             if table_name.lower() in token_str:
-        #                 used_tables.add(table_name)
         used_tables = set()
         used_columns = set()
         try:
@@ -112,14 +82,6 @@ def load_ddl(path, train_data_path):
             whole_schema += db_schemas_full[db_id][t]
             whole_schema += "\n\n"
 
-        # print(whole_schema)
-        # if used_tables is None or None in used_tables:
-        # print(item['query'])
-        # print(used_columns)
-        
-        
-        # selected_schema = "\n\n".join(ddls)
-        
         if check:
             print(question)
             print(whole_schema)
@@ -142,5 +104,28 @@ def load_ddl(path, train_data_path):
             "input": f"{question}",
             "output": sql
         })
+    return records
+
+def load_ddl(path, train_data_path):
+    """
+    각 SQL에서 사용된 테이블만 포함하고,
+    스키마를 SQL DDL(CREATE TABLE) 형식으로 표현
+    """
+    with open(train_data_path, "r") as f:
+        train_data = json.load(f)
+    with open(f'{path}/tables.json', "r") as f:
+        tables_data = json.load(f)
+
+   
+    
+    
+    # instruction-style 데이터셋 생성
+    db_schemas_full = get_db_schemas_full(tables_data)
+
+    check = True
+
+    # instruction-style 데이터셋 생성
+    records = extract_record(train_data)
+
 
     return Dataset.from_list(records)
