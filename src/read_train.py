@@ -44,7 +44,7 @@ def get_db_schemas_full(tables_data):
 
             # CREATE TABLE 문
             ddl = f"CREATE TABLE {table} (\n    " + ",\n    ".join(cols_def) + "\n);"
-            table_schemas[table] = ddl
+            table_schemas[table.lower()] = ddl
 
         db_schemas_full[db_id] = table_schemas
     return db_schemas_full
@@ -67,8 +67,8 @@ def extract_record(train_data):
             for table in tree.find_all(sqlglot.exp.Table):
                 table_name = table.name
                 # 스키마에 있는 테이블만 필터링
-                if table_name in db_schemas_full[db_id]:
-                    used_tables.add(table_name)
+                if table_name.lower() in db_schemas_full[db_id]:
+                    used_tables.add(table_name.lower())
         except Exception as e:
             print(f"SQL parsing error: {e}")
 
