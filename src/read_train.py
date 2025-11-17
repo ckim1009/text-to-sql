@@ -49,12 +49,19 @@ def get_db_schemas_full(tables_data):
         db_schemas_full[db_id] = table_schemas
     return db_schemas_full
 
-def extract_record(train_data):
+def extract_record(train_data, db_schemas_full):
     records = []
+    # check = True
+
+    querys = []
+    db_ids = []
+    
     for item in train_data:
         db_id = item["db_id"]
         question = item["question"]
         sql = item["query"]
+        querys.append(sql)
+        db_ids.append(db_id)
 
         used_tables = set()
         used_columns = set()
@@ -82,12 +89,12 @@ def extract_record(train_data):
             whole_schema += db_schemas_full[db_id][t]
             whole_schema += "\n\n"
 
-        if check:
-            print(question)
-            print(whole_schema)
-            print(used_columns)
-            print(sql)
-            check=False
+        # if check:
+        #     print(question)
+        #     print(whole_schema)
+        #     print(used_columns)
+        #     print(sql)
+        #     check=False
         
         records.append({
             "instruction": 
@@ -100,13 +107,38 @@ def extract_record(train_data):
             # "schema_map": f'{schema_map}',
             "whole_schema":f"{whole_schema}",
             "schema":f"{selected_schema}",
-            "hint":f"The SQL query might involve the following columns: {used_columns}",
+            "hint":f"Target columns: {used_columns}",
             "input": f"{question}",
             "output": sql
         })
-    return records
+    return records, db_ids, querys
 
-def load_ddl(path, train_data_path):
+def load_ddl(path, dataset):
+    """
+    각 SQL에서 사용된 테이블만 포함하고,
+    스키마를 SQL DDL(CREATE TABLE) 형식으로 표현
+    """
+    
+    with open(f'{path}/tables.json', "r") as f:
+        tables_data = json.load(f)
+
+    if dataset=='spider':
+        with open(f'{path}/train_spider.json', "r") as f:
+            train_data = json.load(f)
+    
+    # instruction-style 데이터셋 생성
+    db_schemas_full = get_db_schemas_full(tables_data)
+
+
+
+    # instruction-style 데이터셋 생성
+    records, db_ids, querys = extract_record(train_data, db_schemas_full)
+
+
+    return Dataset.from_list(records)
+
+
+def load_ddl_dev(path, train_data_path):
     """
     각 SQL에서 사용된 테이블만 포함하고,
     스키마를 SQL DDL(CREATE TABLE) 형식으로 표현
@@ -122,10 +154,10 @@ def load_ddl(path, train_data_path):
     # instruction-style 데이터셋 생성
     db_schemas_full = get_db_schemas_full(tables_data)
 
-    check = True
+
 
     # instruction-style 데이터셋 생성
-    records = extract_record(train_data)
+    records, db_ids, querys = extract_record(train_data, db_schemas_full)
 
 
-    return Dataset.from_list(records)
+    return Dataset.from_list(records), db_ids, querys
