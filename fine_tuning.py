@@ -10,33 +10,35 @@ from transformers import (
 from peft import LoraConfig, get_peft_model, TaskType
 from trl import SFTTrainer
 
-import bitsandbytes as bnb
+# import bitsandbytes as bnb
 
 import os
 import sqlite3
 from datasets import concatenate_datasets
 
-from src.read_train import load_spider_filtered_ddl, load_ddl, load_table_ddl
+from src.read_train import load_ddl
 
 
 # GPU 0번 디바이스 고정
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 import torch
 # torch.cuda.set_device(4)
 # device = torch.device("cuda:4")
 
 
-# SPIDER_PATH = ""
+SPIDER_PATH = ""
 
 
-train_dataset = load_ddl(SPIDER_PATH ,f'{SPIDER_PATH}/train_spider.json') # sql schema hint(column)
+train_dataset = load_ddl(SPIDER_PATH ,'spider') # sql schema hint(column)
 
-
+# train_dataset1 = load_ddl(SPIDER_PATH ,'spider')
+# train_dataset2 = load_ddl(SPIDER_PATH ,'spider-syn')
+# train_datset = concatenate_datasets([train_dataset1, train_dataset2])
 
 # =========================
 # 2. 모델 & 토크나이저 불러오기
 # =========================
-# model_name = "codellama/CodeLlama-7b-Instruct-hf"
+# model_name = "microsoft/Phi-4-mini-Instruct"
 # model_name = "meta-llama/Llama-3.2-1B-Instruct"
 model_name = "meta-llama/Llama-3.2-3B-Instruct"
 # model_name = "google/gemma-3-4b-it"
@@ -89,7 +91,7 @@ model = AutoModelForCausalLM.from_pretrained(
 # )
 lora_config = LoraConfig(
     task_type=TaskType.CAUSAL_LM,
-    r=256,
+    r=128,
     lora_alpha=32,
     lora_dropout=0.1
 )
@@ -118,7 +120,7 @@ trainer = SFTTrainer(
     model=model,
     train_dataset=train_dataset,
     args=training_args,
-    formatting_func=lambda ex: f"### Instruction:\n{ex['instruction']}\n\n###Database Schema:\n{ex['schema']}\n\n### Input:\n{ex['input']}\n\n### Hint:\n{ex['hint']}\n\n### Output:\n{ex['output']}"
+    formatting_func=lambda ex: f"### Instruction:\n{ex['instruction']}\n\n###Database Schema:\n{ex['schema']}\n\n### Hint:\n{ex['hint']}\n\n### Input:\n{ex['input']}\n\n### Output:\n{ex['output']}"
 
 )
 
