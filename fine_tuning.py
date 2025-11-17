@@ -25,7 +25,7 @@ import torch
 # torch.cuda.set_device(4)
 # device = torch.device("cuda:4")
 
-
+output_dir = ""
 SPIDER_PATH = ""
 
 
@@ -103,7 +103,7 @@ model = get_peft_model(model, lora_config)
 # 4. Trainer 세팅
 # =========================
 training_args = TrainingArguments(
-    output_dir="./sql-llama-lora",
+    output_dir=output_dir,
     per_device_train_batch_size=1,
     gradient_accumulation_steps=16,
     learning_rate=5e-5,# 1e-4,
@@ -131,4 +131,4 @@ trainer.train()
 
 
 # 학습 종료 후
-trainer.model.save_pretrained("./sql-llama-lora")  # LoRA weight만 저장
+trainer.model.save_pretrained(output_dir)  # LoRA weight만 저장
