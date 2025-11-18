@@ -89,9 +89,11 @@ if __name__ == '__main__':
     # 종료 시간 기록
     end_time = time.time()
 
-
     with open("output/dev_predictions.sql", "w") as f:
-        json.dump(predictions, f, indent=2, ensure_ascii=False)
+        f.write('\n'.join(predictions))
+
+    # with open("output/dev_predictions.sql", "w") as f:
+    #     json.dump(predictions, f, indent=2, ensure_ascii=False)
 
     
     # 걸린 시간 출력
