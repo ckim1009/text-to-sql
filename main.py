@@ -6,9 +6,9 @@ from peft import PeftModel
 import argparse
 
 
-from llm.ask_llm import load_llm_model, get_response_llm
+from src.ask_llm import load_llm_model, get_response_llm
 from parser.sql_parser import extract_sql_from_text
-from read_data.read_dev import load_spider_filtered_ddl, load_ddl, load_table_ddl
+from src.read_train import load_ddl_dev
 
 
 lora_model_path = "./sql-llama-lora" 
@@ -30,7 +30,7 @@ def parse_args():
 
 #--------------------------------------------------------------------------------------------
 
-
+PATH = ''
 
 if len(sys.argv)>1 and sys.argv[1] == "--dataset":
     DATASET_TABLE = sys.argv[2]+"tables.json"
@@ -40,7 +40,7 @@ if len(sys.argv)>1 and sys.argv[1] == "--dataset":
 if __name__ == '__main__':
     args = parse_args()
 
-    dev_dataset, db_ids, questions = load_ddl(DATASET_DEV, DATASET_TABLE)
+    dev_dataset, db_ids, questions = load_ddl_dev(PATH, 'spider')
 
     base_model, tokenizer=None,None
 
