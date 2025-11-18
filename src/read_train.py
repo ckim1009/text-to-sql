@@ -51,16 +51,16 @@ def get_db_schemas_full(tables_data):
 
 def extract_record(train_data, db_schemas_full):
     records = []
-    # check = True
+    check = True
 
-    querys = []
+    questions = []
     db_ids = []
     
     for item in train_data:
         db_id = item["db_id"]
         question = item["question"]
         sql = item["query"]
-        querys.append(sql)
+        questions.append(question)
         db_ids.append(db_id)
 
         used_tables = set()
@@ -89,12 +89,13 @@ def extract_record(train_data, db_schemas_full):
             whole_schema += db_schemas_full[db_id][t]
             whole_schema += "\n\n"
 
-        # if check:
-        #     print(question)
-        #     print(whole_schema)
-        #     print(used_columns)
-        #     print(sql)
-        #     check=False
+        if check:
+            print(question)
+            # print(whole_schema)
+            print(selected_schema)
+            print(used_columns)
+            print(sql)
+            check=False
         
         records.append({
             "instruction": 
@@ -111,7 +112,7 @@ def extract_record(train_data, db_schemas_full):
             "input": f"{question}",
             "output": sql
         })
-    return records, db_ids, querys
+    return records, db_ids, questions
 
 def load_ddl(path, dataset):
     """
@@ -132,24 +133,25 @@ def load_ddl(path, dataset):
 
 
     # instruction-style 데이터셋 생성
-    records, db_ids, querys = extract_record(train_data, db_schemas_full)
+    records, db_ids, questions = extract_record(train_data, db_schemas_full)
 
 
     return Dataset.from_list(records)
 
 
-def load_ddl_dev(path, train_data_path):
+def load_ddl_dev(path, dataset):
     """
     각 SQL에서 사용된 테이블만 포함하고,
     스키마를 SQL DDL(CREATE TABLE) 형식으로 표현
     """
-    with open(train_data_path, "r") as f:
-        train_data = json.load(f)
+
     with open(f'{path}/tables.json', "r") as f:
         tables_data = json.load(f)
 
    
-    
+    if dataset=='spider':
+        with open(f'{path}/dev.json', "r") as f:
+            train_data = json.load(f)
     
     # instruction-style 데이터셋 생성
     db_schemas_full = get_db_schemas_full(tables_data)
@@ -157,7 +159,12 @@ def load_ddl_dev(path, train_data_path):
 
 
     # instruction-style 데이터셋 생성
-    records, db_ids, querys = extract_record(train_data, db_schemas_full)
+    records, db_ids, questions = extract_record(train_data, db_schemas_full)
 
 
-    return Dataset.from_list(records), db_ids, querys
+    return Dataset.from_list(records), db_ids, questions
+
+if __name__ == "__main__":
+    path = ''
+    dataset= 'spider'
+    records, db_ids, questions = load_ddl_dev(path, dataset)
