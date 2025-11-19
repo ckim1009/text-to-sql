@@ -15,7 +15,7 @@ def extract_sql_from_text(text: str) -> str:
 
     # 2. SQL문 끝 추정: 세미콜론이나 다음 ###/JSON/CSV 같은 패턴
     #    세미콜론 없으면 다음 비SQL 키워드까지
-    end_patterns = [r';', r'###', r'\[', r'CountryId,', r'\{']
+    end_patterns = [r';', r'###', r'\[', r'\{']
     sql_end = len(text)
     for pattern in end_patterns:
         match = re.search(pattern, text[sql_start.start():])
