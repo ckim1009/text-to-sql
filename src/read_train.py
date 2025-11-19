@@ -7,6 +7,13 @@ from datasets import Dataset
 import re
 import sqlglot
 
+def print_columns(used_columns):
+    if used_columns:
+        return f"{used_columns}"
+    else:
+        return f'{{}}'
+
+
 def get_db_schemas_full(tables_data):
     # instruction-style 데이터셋 생성
     db_schemas_full = {}
@@ -93,7 +100,7 @@ def extract_record(train_data, db_schemas_full):
             print(question)
             # print(whole_schema)
             print(selected_schema)
-            print(used_columns)
+            print(print_columns(used_columns))
             print(sql)
             check=False
         
@@ -108,7 +115,7 @@ def extract_record(train_data, db_schemas_full):
             # "schema_map": f'{schema_map}',
             "whole_schema":f"{whole_schema}",
             "schema":f"{selected_schema}",
-            "hint":f"Target columns: {used_columns}",
+            "hint":f"Target columns: {print_columns(used_columns)}",
             "input": f"{question}",
             "output": sql
         })
