@@ -26,7 +26,7 @@ def extract_sql_from_text(text: str) -> str:
     sql_text = text[sql_start.start():sql_end]
 
     # 3. 줄바꿈, 탭, 캐리지 리턴 제거
-    sql_text = re.sub(r'[\n\t\r]', '', sql_text)
+    sql_text = re.sub(r'[\n\t\r]', ' ', sql_text)
 
     # 4. 연속 스페이스 2개 이상 → 1개로
     sql_text = re.sub(r' {2,}', ' ', sql_text)
