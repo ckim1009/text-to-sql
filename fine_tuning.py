@@ -1,134 +1,159 @@
-import json
-from datasets import Dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForCausalLM,
-    AutoConfig,
-    TrainingArguments,
-    DataCollatorForSeq2Seq,
-)
-from peft import LoraConfig, get_peft_model, TaskType
+import torch
+import gc
+from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM, TrainingArguments
+from peft import LoraConfig, TaskType, get_peft_model
 from trl import SFTTrainer
 
-# import bitsandbytes as bnb
-
-import os
-import sqlite3
-from datasets import concatenate_datasets
-
+# 사용자 정의 모듈
 from src.read_train import load_ddl
 
 
-# GPU 0번 디바이스 고정
-# os.environ["CUDA_VISIBLE_DEVICES"] = "3"
-import torch
-# torch.cuda.set_device(4)
-# device = torch.device("cuda:4")
-
-output_dir = ""
+# =========================
+# 0. 공통 데이터셋 로드
+# =========================
 SPIDER_PATH = ""
 
-
-train_dataset = load_ddl(SPIDER_PATH ,'spider') # sql schema hint(column)
-
-# train_dataset1 = load_ddl(SPIDER_PATH ,'spider')
-# train_dataset2 = load_ddl(SPIDER_PATH ,'spider-syn')
-# train_datset = concatenate_datasets([train_dataset1, train_dataset2])
+try:
+    train_dataset = load_ddl(SPIDER_PATH, 'spider') 
+except NameError:
+    print("Warning: load_ddl function not found.")
+    train_dataset = None 
 
 # =========================
-# 2. 모델 & 토크나이저 불러오기
+# 1. 학습 설정 정의 (모델별 모듈 지정)
 # =========================
-# model_name = "microsoft/Phi-4-mini-Instruct"
-# model_name = "meta-llama/Llama-3.2-1B-Instruct"
-model_name = "meta-llama/Llama-3.2-3B-Instruct"
-# model_name = "google/gemma-3-4b-it"
+# (모델명, 저장경로, 타겟모듈리스트)
+method_name = 'URFine'
+models_schedule = [
+    {
+        "name": "microsoft/Phi-4-mini-Instruct", 
+        "output": f"./{method_name}-phi-4-lora",
+        # lm_head 제외, 확인된 Projection Layer 사용
+        "target_modules": ['qkv_proj', 'down_proj', 'gate_up_proj', 'o_proj']
+    },
+    {
+        "name": "meta-llama/Llama-3.2-3B-Instruct", 
+        "output": f"./{method_name}-llama-3.2-3b-lora",
+        "target_modules": None
+    },
+]
 
+# =========================
+# 2. 학습 실행 함수
+# =========================
+def train_and_save_lora(config_info, dataset):
+    model_name = config_info["name"]
+    output_dir = config_info["output"]
+    target_modules = config_info["target_modules"]
 
-tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
-
-# # Config 불러와서 FlashAttention 비활성화
-# config = AutoConfig.from_pretrained(model_name)
-# config.use_flash_attention = False
-
-# # 4bit 양자화 설정
-# bnb_config = bnb.BitsAndBytesConfig(
-#     load_in_4bit=True,
-#     bnb_4bit_compute_dtype=torch.float16,
-#     bnb_4bit_use_double_quant=True,
-#     bnb_4bit_quant_type="nf4"
-# )
-
-
-# Config 설정으로 FlashAttention 비활성화
-config = AutoConfig.from_pretrained(model_name)
-
-# FlashAttention 관련 설정들을 명시적으로 비활성화
-config.use_cache = False  # LoRA 학습에서는 cache 비활성화
-if hasattr(config, "_flash_attn_2_enabled"):
-    config._flash_attn_2_enabled = False
-if hasattr(config, "use_flash_attention"):
-    config.use_flash_attention = False
+    print(f"\n\n{'='*50}")
+    print(f"Starting training pipeline for: {model_name}")
     
-# 모델 로드 시 attention implementation 명시
-model = AutoModelForCausalLM.from_pretrained(
-    model_name,
-    config=config,
-    device_map="auto",
-    # device_map={"": device},  # 모든 레이어를 GPU 0번에 할당
-    torch_dtype=torch.float16,
-    attn_implementation="eager",  # FlashAttention 대신 eager implementation 사용
-    trust_remote_code=True
-)
+    if target_modules:
+        print(f"Custom Target Modules: {target_modules}")
+    else:
+        print("Target Modules: Default (None specified)")
+        
+    print(f"{'='*50}\n")
+
+    # 1. 토크나이저 로드
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False, trust_remote_code=True)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+    
+    # 2. Config 설정 (FlashAttention OFF)
+    config = AutoConfig.from_pretrained(model_name, trust_remote_code=True)
+    config.use_cache = False 
+    if hasattr(config, "_flash_attn_2_enabled"):
+        config._flash_attn_2_enabled = False
+    if hasattr(config, "use_flash_attention"):
+        config.use_flash_attention = False
+
+    # 3. 모델 로드
+    model = AutoModelForCausalLM.from_pretrained(
+        model_name,
+        config=config,
+        device_map="auto",
+        torch_dtype=torch.float16,
+        attn_implementation="eager",
+        trust_remote_code=True
+    )
+
+    # 4. LoRA 설정 (조건문 적용)
+    if target_modules is not None:
+        # Phi-4, Qwen용: 지정된 모듈 사용
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=128,
+            lora_alpha=32,
+            lora_dropout=0.1,
+            target_modules=target_modules
+        )
+    else:
+        # Llama용: target_modules 지정 안 함 (PEFT 라이브러리 기본값 사용)
+        lora_config = LoraConfig(
+            task_type=TaskType.CAUSAL_LM,
+            r=128,
+            lora_alpha=32,
+            lora_dropout=0.1
+            # target_modules 파라미터 생략
+        )
+
+    model = get_peft_model(model, lora_config)
+    model.print_trainable_parameters()
+
+    # 5. Training Arguments
+    training_args = TrainingArguments(
+        output_dir=output_dir,
+        per_device_train_batch_size=1,
+        gradient_accumulation_steps=16,
+        learning_rate=5e-5,
+        num_train_epochs=2,
+        save_strategy="epoch",
+        logging_steps=50,
+        bf16=True,
+        optim="paged_adamw_32bit",
+        save_total_limit=2,
+        remove_unused_columns=False,
+    )
+
+    # 6. Trainer 초기화
+    trainer = SFTTrainer(
+        model=model,
+        train_dataset=dataset,
+        args=training_args,
+        formatting_func=lambda ex: f"###Database Schema:\n{ex['schema']}\n### {ex['hint']}\n### Question: {ex['input']}\n### SQL: {ex['output']}"
+    )
+
+    # 7. 학습 시작
+    trainer.train()
+
+    # 8. 저장
+    trainer.model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
+    print(f"Successfully saved {model_name} to {output_dir}")
+
+    # 9. 메모리 정리
+    del model
+    del trainer
+    del tokenizer
+    gc.collect()
+    torch.cuda.empty_cache()
+    print(f"Memory cleared after {model_name}.\n")
+
 
 # =========================
-# 3. LoRA 설정
+# 3. 순차 실행 루프
 # =========================
-# lora_config = LoraConfig(
-#     task_type=TaskType.CAUSAL_LM,
-#     r=8,
-#     lora_alpha=32,
-#     lora_dropout=0.1
-# )
-lora_config = LoraConfig(
-    task_type=TaskType.CAUSAL_LM,
-    r=128,
-    lora_alpha=32,
-    lora_dropout=0.1
-)
+for info in models_schedule:
+    gc.collect()
+    torch.cuda.empty_cache()
+    
+    try:
+        train_and_save_lora(info, train_dataset)
+    except Exception as e:
+        print(f"!!! Failed to train {info['name']} !!!")
+        print(f"Error: {e}")
+        continue
 
-
-model = get_peft_model(model, lora_config)
-
-# =========================
-# 4. Trainer 세팅
-# =========================
-training_args = TrainingArguments(
-    output_dir=output_dir,
-    per_device_train_batch_size=1,
-    gradient_accumulation_steps=16,
-    learning_rate=5e-5,# 1e-4,
-    num_train_epochs=2,
-    save_strategy="epoch",
-    logging_steps=50,
-    bf16=True,
-    optim="paged_adamw_32bit",
-    save_total_limit=3,
-    remove_unused_columns=False,
-)
-
-trainer = SFTTrainer(
-    model=model,
-    train_dataset=train_dataset,
-    args=training_args,
-    formatting_func=lambda ex: f"### Instruction:\n{ex['instruction']}\n\n###Database Schema:\n{ex['schema']}\n\n### Hint:\n{ex['hint']}\n\n### Input:\n{ex['input']}\n\n### Output:\n{ex['output']}"
-
-)
-
-# =========================
-# 5. 학습 시작
-# =========================
-trainer.train()
-
-
-# 학습 종료 후
-trainer.model.save_pretrained(output_dir)  # LoRA weight만 저장
+print("\nAll scheduled training jobs finished.")
